@@ -1,0 +1,73 @@
+version: "3.4"
+services:
+  prd-paperless-broker:
+    container_name: prd-paperless-broker
+    image: redis:6.0
+    restart: unless-stopped
+    networks:
+      - paperless
+
+  prd-paperless-db:
+    container_name: prd-paperless-db
+    image: postgres:13
+    restart: unless-stopped
+    env_file: prd-paperless-db.env
+    networks:
+      - paperless
+    volumes:
+      - prd-paperless-database-data:/var/lib/postgresql/data
+
+  prd-paperless-webserver:
+    container_name: prd-paperless-webserver
+    image: jonaswinkler/paperless-ng:latest
+    restart: unless-stopped
+    env_file: prd-paperless-webserver.env
+    depends_on:
+      - prd-paperless-broker
+      - prd-paperless-db
+    networks:
+      - paperless
+    ports:
+      - 8800:8000
+    volumes:
+      - data:/usr/src/paperless/data
+      - media:/usr/src/paperless/media
+      - export:/usr/src/paperless/export
+      - consume:/usr/src/paperless/consume
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  prd-paperless-database-data:
+    name: prd-paperless-database-data
+  data:
+    driver_opts:
+      type: "nfs"
+      o: "addr=storage-server.lan,nolock,soft,rw,nfsvers=4"
+      device: ":/r10_8tb/coen/paperless/data"
+  media:
+    driver_opts:
+      type: "nfs"
+      o: "addr=storage-server.lan,nolock,soft,rw,nfsvers=4"
+      device: ":/r10_8tb/coen/paperless/media"
+  export:
+    driver_opts:
+      type: "nfs"
+      o: "addr=storage-server.lan,nolock,soft,rw,nfsvers=4"
+      device: ":/r10_8tb/coen/paperless/export"
+  consume:
+    driver_opts:
+      type: "nfs"
+      o: "addr=storage-server.lan,nolock,soft,rw,nfsvers=4"
+      device: ":/r10_8tb/coen/paperless/consume"
+
+networks:
+  paperless:
+    name: paperless
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
